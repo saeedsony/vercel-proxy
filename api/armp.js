@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  const target = "http://81.91.176.222:443/armp";
+  const target = "https://81.91.176.222:443/armp";
 
   try {
     const response = await fetch(target, {
