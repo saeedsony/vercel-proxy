@@ -1,28 +1,49 @@
+import https from "https";
+
 export default async function handler(req, res) {
-  const target = "https://212.43.144.189/armp";
+  const targetUrl = "https://212.43.144.189:443/armp";
 
   try {
-    const response = await fetch(target, {
+    const options = {
       method: req.method,
       headers: {
-        "content-type": req.headers["content-type"] || "",
+        ...req.headers,
+        host: "212.43.144.189",
       },
-      body: req.method === "GET" || req.method === "HEAD" ? undefined : req.body,
+      rejectUnauthorized: false, // مهم برای IP بدون SSL معتبر
+    };
+
+    const proxyReq = https.request(targetUrl, options, (proxyRes) => {
+      res.statusCode = proxyRes.statusCode;
+
+      // فوروارد هدرها
+      Object.entries(proxyRes.headers).forEach(([key, value]) => {
+        if (
+          !["content-encoding", "transfer-encoding", "connection"].includes(
+            key.toLowerCase()
+          )
+        ) {
+          res.setHeader(key, value);
+        }
+      });
+
+      // استریم مستقیم (بدون مصرف RAM)
+      proxyRes.pipe(res);
     });
 
-    res.status(response.status);
-
-    response.headers.forEach((value, key) => {
-      if (!["content-encoding", "transfer-encoding", "connection", "content-length"].includes(key.toLowerCase())) {
-        res.setHeader(key, value);
-      }
+    proxyReq.on("error", (err) => {
+      console.error("Proxy error:", err);
+      res.status(500).send("Proxy Error");
     });
 
-    const data = Buffer.from(await response.arrayBuffer());
-    res.send(data);
+    // ارسال body (برای POST/PUT)
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      proxyReq.write(req.body || "");
+    }
 
+    proxyReq.end();
   } catch (err) {
     console.error(err);
-    res.status(500).send("Proxy Error");
+    res.status(500).send("Proxy Fatal Error");
   }
 }
